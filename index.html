@@ -1,0 +1,1790 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Plymouth City Council Elections 2026</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <style>
+    /* ── Design tokens ─────────────────────────────────── */
+    :root {
+      --bg:       #0d0f14;
+      --surface:  #151821;
+      --surface2: #1c2030;
+      --border:   #252a38;
+      --accent:   #e8c547;
+      --accent2:  #4fc3f7;
+      --text:     #e2e8f0;
+      --muted:    #64748b;
+      --danger:   #f87171;
+      --success:  #22c55e;
+      --radius:   2px;
+      --transition: 0.18s ease;
+    }
+
+    /* ── Reset ─────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+    a { color: inherit; }
+
+    /* ── Loading overlay ───────────────────────────────── */
+    #loading-overlay {
+      position: fixed;
+      inset: 0;
+      background: var(--bg);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      z-index: 999;
+      transition: opacity 0.4s ease;
+    }
+    #loading-overlay.hidden { opacity: 0; pointer-events: none; }
+    .spinner {
+      width: 32px;
+      height: 32px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-text {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 2px;
+    }
+    #error-banner {
+      display: none;
+      background: rgba(248,113,113,0.1);
+      border: 1px solid rgba(248,113,113,0.3);
+      color: var(--danger);
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 12px;
+      padding: 12px 32px;
+      text-align: center;
+    }
+    #error-banner.visible { display: block; }
+
+    /* ── Header ────────────────────────────────────────── */
+    header {
+      border-bottom: 1px solid var(--border);
+      padding: 20px 32px;
+      display: flex;
+      align-items: flex-end;
+      gap: 24px;
+      position: relative;
+      overflow: hidden;
+    }
+    header::before {
+      content: '';
+      position: absolute; inset: 0;
+      background:
+        radial-gradient(ellipse at 20% 50%, rgba(232,197,71,0.06) 0%, transparent 60%),
+        radial-gradient(ellipse at 80% 50%, rgba(79,195,247,0.04) 0%, transparent 60%);
+      pointer-events: none;
+    }
+    .header-badge {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 10px;
+      color: var(--accent);
+      background: rgba(232,197,71,0.1);
+      border: 1px solid rgba(232,197,71,0.3);
+      padding: 3px 8px;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      margin-bottom: 6px;
+      display: inline-block;
+    }
+    h1 {
+      font-family: 'Playfair Display', serif;
+      font-size: clamp(22px, 3vw, 36px);
+      font-weight: 900;
+      line-height: 1;
+      color: #fff;
+      letter-spacing: -1px;
+    }
+    h1 span { color: var(--accent); }
+    .header-meta { margin-left: auto; text-align: right; }
+    .header-meta .date {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .header-meta .poll { font-size: 13px; color: var(--accent2); margin-top: 4px; }
+    .header-brand { font-family: 'IBM Plex Mono', monospace; font-size: 11px; margin-top: 8px; }
+    .header-brand a {
+      color: var(--accent);
+      text-decoration: none;
+      border-bottom: 1px solid rgba(232,197,71,0.4);
+      padding-bottom: 1px;
+      transition: border-color var(--transition);
+    }
+    .header-brand a:hover, .header-brand a:focus { border-bottom-color: var(--accent); outline: none; }
+
+    /* ── Tab nav ───────────────────────────────────────── */
+    .tab-nav {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      padding: 0 32px;
+      background: var(--surface);
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .tab-btn {
+      padding: 12px 20px;
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--muted);
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      cursor: pointer;
+      transition: color var(--transition);
+      margin-bottom: -1px;
+      white-space: nowrap;
+      min-height: 44px; /* accessible tap target */
+    }
+    .tab-btn:hover { color: var(--text); }
+    .tab-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+    .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+    /* ── Layout ────────────────────────────────────────── */
+    .container { padding: 24px 32px; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* ── Insights ──────────────────────────────────────── */
+    .insights {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .insight-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 16px 20px;
+      position: relative;
+      overflow: hidden;
+    }
+    .insight-card::before {
+      content: '';
+      position: absolute; top: 0; left: 0;
+      width: 3px; height: 100%;
+      background: var(--accent);
+    }
+    .insight-card.blue::before   { background: var(--accent2); }
+    .insight-card.green::before  { background: var(--success); }
+    .insight-card.orange::before { background: #f97316; }
+    .insight-card.purple::before { background: #a78bfa; }
+    .insight-label {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    .insight-value { font-size: 20px; font-weight: 500; color: #fff; line-height: 1.2; }
+    .insight-sub   { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+    /* ── Filters ───────────────────────────────────────── */
+    .filters {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+      align-items: flex-end;
+    }
+    .filter-group { display: flex; flex-direction: column; gap: 4px; }
+    .filter-label {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: var(--muted);
+    }
+    select, input[type="text"] {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 12px;
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-size: 13px;
+      border-radius: var(--radius);
+      outline: none;
+      transition: border-color var(--transition);
+      min-width: 180px;
+      min-height: 40px;
+    }
+    select:focus, input[type="text"]:focus { border-color: var(--accent); }
+    select option { background: var(--surface2); }
+    .filter-reset {
+      padding: 8px 16px;
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      transition: border-color var(--transition), color var(--transition);
+      min-height: 40px;
+      border-radius: var(--radius);
+    }
+    .filter-reset:hover  { border-color: var(--accent); color: var(--accent); }
+    .filter-reset:focus-visible { outline: 2px solid var(--accent); }
+    .filter-count {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px;
+      color: var(--muted);
+      padding: 8px 0;
+      align-self: center;
+    }
+
+    /* ── Charts ────────────────────────────────────────── */
+    .charts-grid {
+      display: grid;
+      grid-template-columns: 3fr 2fr;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .chart-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 20px;
+    }
+    .chart-title {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: var(--muted);
+      margin-bottom: 16px;
+    }
+    .chart-wrap { position: relative; height: 340px; }
+
+    /* ── Coverage grid ─────────────────────────────────── */
+    .coverage-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 20px;
+      margin-bottom: 24px;
+    }
+    .coverage-title {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: var(--muted);
+      margin-bottom: 16px;
+    }
+    .coverage-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .coverage-table { border-collapse: collapse; min-width: 100%; font-size: 11px; }
+    .coverage-table th {
+      padding: 6px 10px;
+      text-align: center;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+      background: var(--surface2);
+    }
+    .coverage-table th.ward-col { text-align: left; min-width: 160px; }
+    .coverage-table td {
+      padding: 5px 10px;
+      border-bottom: 1px solid rgba(37,42,56,0.5);
+      text-align: center;
+    }
+    .coverage-table td.ward-name {
+      text-align: left;
+      font-size: 12px;
+      color: var(--text);
+      white-space: nowrap;
+    }
+    .dot-present {
+      display: inline-block;
+      width: 18px; height: 18px;
+      border-radius: var(--radius);
+    }
+    .dot-absent {
+      display: inline-block;
+      width: 18px; height: 18px;
+      background: rgba(255,255,255,0.03);
+      border-radius: var(--radius);
+    }
+    .coverage-legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 14px; }
+    .legend-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
+    .legend-dot { width: 12px; height: 12px; border-radius: var(--radius); flex-shrink: 0; }
+
+    /* ── Table ─────────────────────────────────────────── */
+    .table-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      margin-bottom: 24px;
+    }
+    .table-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .table-title {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: var(--muted);
+    }
+    .export-btn {
+      padding: 6px 14px;
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 10px;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      transition: border-color var(--transition), color var(--transition);
+      border-radius: var(--radius);
+      min-height: 32px;
+    }
+    .export-btn:hover { border-color: var(--accent2); color: var(--accent2); }
+    .export-btn:focus-visible { outline: 2px solid var(--accent); }
+    .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    table { width: 100%; border-collapse: collapse; }
+    thead th {
+      padding: 10px 16px;
+      text-align: left;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+      background: var(--surface2);
+    }
+    thead th:hover { color: var(--accent); }
+    thead th:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+    thead th .sort-arrow { margin-left: 4px; }
+    thead th.asc  .sort-arrow::after { content: '↑'; color: var(--accent); }
+    thead th.desc .sort-arrow::after { content: '↓'; color: var(--accent); }
+    thead th:not(.asc):not(.desc) .sort-arrow::after { content: '↕'; opacity: 0.3; }
+    tbody td {
+      padding: 10px 16px;
+      border-bottom: 1px solid rgba(37,42,56,0.6);
+      font-size: 13px;
+      vertical-align: middle;
+    }
+    tbody tr:hover td { background: rgba(255,255,255,0.02); }
+    tbody tr.selected td { background: rgba(232,197,71,0.05); }
+    tbody tr.selected td:first-child { border-left: 2px solid var(--accent); }
+
+    /* ── Party pill ────────────────────────────────────── */
+    .party-pill {
+      display: inline-block;
+      padding: 2px 8px;
+      font-size: 10px;
+      font-family: 'IBM Plex Mono', monospace;
+      white-space: nowrap;
+      border-radius: var(--radius);
+    }
+
+    /* ── Candidate link ────────────────────────────────── */
+    .cand-link {
+      cursor: pointer;
+      text-decoration: underline;
+      text-decoration-color: rgba(226,232,240,0.2);
+      text-underline-offset: 3px;
+      transition: color var(--transition);
+    }
+    .cand-link:hover  { color: var(--accent); }
+    .cand-link:focus-visible { outline: 2px solid var(--accent); border-radius: 1px; }
+
+    /* ── Detail panel ──────────────────────────────────── */
+    .detail-panel {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      padding: 20px 24px;
+      margin-bottom: 24px;
+      display: none;
+    }
+    .detail-panel.visible { display: block; }
+    .detail-header {
+      font-family: 'Playfair Display', serif;
+      font-size: 20px;
+      color: #fff;
+      margin-bottom: 4px;
+    }
+    .detail-party { font-size: 12px; margin-bottom: 16px; }
+    .detail-close {
+      float: right;
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 18px;
+      cursor: pointer;
+      padding: 4px;
+      line-height: 1;
+      transition: color var(--transition);
+    }
+    .detail-close:hover { color: var(--accent); }
+    .detail-close:focus-visible { outline: 2px solid var(--accent); }
+
+    /* Detail sections */
+    .detail-section { margin-top: 16px; }
+    .detail-section-title {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: var(--muted);
+      margin-bottom: 10px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--border);
+    }
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+    }
+    .detail-item label {
+      display: block;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: var(--muted);
+      margin-bottom: 3px;
+    }
+    .detail-item .detail-value {
+      font-size: 13px;
+      color: var(--text);
+    }
+    .detail-item .detail-value.na {
+      color: var(--muted);
+      font-style: italic;
+    }
+    .detail-item .detail-value a {
+      color: var(--accent2);
+      text-decoration: none;
+      border-bottom: 1px solid rgba(79,195,247,0.3);
+      transition: border-color var(--transition);
+    }
+    .detail-item .detail-value a:hover { border-bottom-color: var(--accent2); }
+    .social-links { display: flex; gap: 10px; margin-top: 4px; flex-wrap: wrap; }
+    .social-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px;
+      color: var(--accent2);
+      text-decoration: none;
+      border: 1px solid rgba(79,195,247,0.2);
+      padding: 4px 10px;
+      border-radius: var(--radius);
+      transition: border-color var(--transition), background var(--transition);
+    }
+    .social-link:hover { border-color: var(--accent2); background: rgba(79,195,247,0.06); }
+    .social-link:focus-visible { outline: 2px solid var(--accent); }
+    .social-icon { font-size: 13px; }
+
+    /* ── Ward cards ────────────────────────────────────── */
+    .ward-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .ward-card { background: var(--surface); border: 1px solid var(--border); overflow: hidden; }
+    .ward-card-header {
+      padding: 12px 16px;
+      background: var(--surface2);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .ward-card-name { font-family: 'Playfair Display', serif; font-size: 15px; font-weight: 700; color: #fff; }
+    .ward-card-meta { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--muted); text-align: right; }
+    .ward-candidate-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 16px;
+      border-bottom: 1px solid rgba(37,42,56,0.5);
+      min-height: 44px;
+    }
+    .ward-candidate-row:last-child { border-bottom: none; }
+    .ward-party-bar { width: 3px; align-self: stretch; border-radius: 1px; flex-shrink: 0; min-height: 28px; }
+    .ward-candidate-name {
+      font-size: 13px;
+      color: var(--text);
+      flex: 1;
+    }
+    .ward-candidate-name.clickable {
+      cursor: pointer;
+      text-decoration: underline;
+      text-decoration-color: rgba(226,232,240,0.2);
+      text-underline-offset: 3px;
+      transition: color var(--transition);
+    }
+    .ward-candidate-name.clickable:hover { color: var(--accent); }
+    .ward-candidate-party { font-family: 'IBM Plex Mono', monospace; font-size: 10px; }
+
+    /* ── Agents tab ────────────────────────────────────── */
+    .agents-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 20px;
+      margin-bottom: 24px;
+    }
+    .agents-title {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    .agents-subtitle {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 16px;
+    }
+    .agent-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 14px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .agent-row:last-child { border-bottom: none; }
+    .agent-count {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 20px;
+      font-weight: 500;
+      color: var(--accent);
+      min-width: 32px;
+      line-height: 1;
+      padding-top: 2px;
+    }
+    .agent-info { flex: 1; min-width: 0; }
+    .agent-name { font-size: 13px; color: #fff; font-weight: 500; margin-bottom: 2px; }
+    .agent-addr { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+    .agent-candidates { font-size: 12px; line-height: 1.9; }
+
+    /* ── Footer ────────────────────────────────────────── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 16px 32px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 10px;
+      color: var(--muted);
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    /* ── Agent explainer ───────────────────────────────── */
+    .agent-explainer {
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      margin-bottom: 0;
+    }
+    .agent-explainer-title {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: var(--accent);
+      padding: 14px 20px;
+      cursor: pointer;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      user-select: none;
+      transition: background var(--transition);
+    }
+    .agent-explainer-title::-webkit-details-marker { display: none; }
+    .agent-explainer-title::before {
+      content: '▶';
+      font-size: 9px;
+      transition: transform 0.2s ease;
+      color: var(--muted);
+    }
+    details.agent-explainer[open] .agent-explainer-title::before {
+      transform: rotate(90deg);
+    }
+    .agent-explainer-title:hover { background: rgba(255,255,255,0.02); }
+    .agent-explainer-body {
+      padding: 0 20px 18px;
+      border-top: 1px solid var(--border);
+    }
+    .agent-explainer-body p {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.7;
+      margin-top: 12px;
+    }
+
+    /* ── About section ─────────────────────────────────── */
+    .about-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 20px;
+      margin-bottom: 24px;
+      max-width: 720px;
+    }
+    .about-title {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: var(--muted);
+      margin-bottom: 16px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    .about-body p {
+      font-size: 14px;
+      color: var(--text);
+      line-height: 1.8;
+      margin-bottom: 14px;
+    }
+    .about-body p:last-child { margin-bottom: 0; }
+    .about-body a {
+      color: var(--accent2);
+      text-decoration: none;
+      border-bottom: 1px solid rgba(79,195,247,0.3);
+      transition: border-color var(--transition);
+    }
+    .about-body a:hover { border-bottom-color: var(--accent2); }
+
+    /* ── Responsive ────────────────────────────────────── */
+    @media (max-width: 900px) {
+      .charts-grid { grid-template-columns: 1fr; }
+      .chart-wrap  { height: 260px; }
+    }
+    @media (max-width: 640px) {
+      header { flex-direction: column; align-items: flex-start; padding: 16px 20px; }
+      .header-meta { margin-left: 0; text-align: left; }
+      .container { padding: 16px 20px; }
+      .tab-nav { padding: 0 20px; }
+      footer { padding: 12px 20px; }
+      .filters { gap: 8px; }
+      select, input[type="text"] { min-width: 140px; }
+      .ward-grid { grid-template-columns: 1fr; }
+      .detail-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Loading overlay -->
+<div id="loading-overlay" role="status" aria-live="polite">
+  <div class="spinner" aria-hidden="true"></div>
+  <p class="loading-text">Loading candidate data…</p>
+</div>
+
+<!-- Error banner -->
+<div id="error-banner" role="alert"></div>
+
+<header>
+  <div>
+    <div class="header-badge" aria-label="Organisation">Plymouth City Council</div>
+    <h1>Local Elections <span>2026</span></h1>
+  </div>
+  <div class="header-meta">
+    <div class="date">Version 1</div>
+    <div class="poll">Poll Open: Thursday 7 May 2026 · 7:00am – 10:00pm</div>
+    <div class="header-brand">By <a href="https://facebook.com/plymouthpolitics" target="_blank" rel="noopener noreferrer">Plymouth Political Watch</a></div>
+  </div>
+</header>
+
+<nav class="tab-nav" role="tablist" aria-label="Main navigation">
+  <button class="tab-btn active" role="tab" aria-selected="true"  aria-controls="tab-overview"   data-tab="overview"   onclick="switchTab(this)">Overview</button>
+  <button class="tab-btn"        role="tab" aria-selected="false" aria-controls="tab-wards"      data-tab="wards"      onclick="switchTab(this)">By Ward</button>
+  <button class="tab-btn"        role="tab" aria-selected="false" aria-controls="tab-candidates" data-tab="candidates" onclick="switchTab(this)">All Candidates</button>
+  <button class="tab-btn"        role="tab" aria-selected="false" aria-controls="tab-agents"     data-tab="agents"     onclick="switchTab(this)">Agents</button>
+  <button class="tab-btn"        role="tab" aria-selected="false" aria-controls="tab-about"      data-tab="about"      onclick="switchTab(this)">About</button>
+</nav>
+
+<div class="container">
+
+  <!-- ══ OVERVIEW ══════════════════════════════════════ -->
+  <div class="tab-content active" id="tab-overview" role="tabpanel" aria-label="Overview">
+    <div class="insights" id="insights" aria-label="Key statistics"></div>
+    <div class="charts-grid">
+      <div class="chart-card">
+        <div class="chart-title">Candidates per Ward</div>
+        <div class="chart-wrap"><canvas id="wardChart" aria-label="Bar chart of candidates per ward" role="img"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Candidates per Party</div>
+        <div class="chart-wrap"><canvas id="partyChart" aria-label="Bar chart of candidates per party" role="img"></canvas></div>
+      </div>
+    </div>
+    <div class="coverage-section">
+      <div class="coverage-title">Party Presence by Ward</div>
+      <div class="coverage-scroll">
+        <table class="coverage-table" id="coverageTable" aria-label="Party presence matrix"></table>
+      </div>
+      <div class="coverage-legend" id="coverageLegend" aria-hidden="true"></div>
+    </div>
+  </div>
+
+  <!-- ══ BY WARD ════════════════════════════════════════ -->
+  <div class="tab-content" id="tab-wards" role="tabpanel" aria-label="Candidates by ward">
+    <div class="ward-grid" id="wardGrid"></div>
+  </div>
+
+  <!-- ══ ALL CANDIDATES ════════════════════════════════ -->
+  <div class="tab-content" id="tab-candidates" role="tabpanel" aria-label="All candidates">
+    <div class="filters" role="search">
+      <div class="filter-group">
+        <label class="filter-label" for="wardFilter">Ward</label>
+        <select id="wardFilter" aria-label="Filter by ward"><option value="">All Wards</option></select>
+      </div>
+      <div class="filter-group">
+        <label class="filter-label" for="partyFilter">Party</label>
+        <select id="partyFilter" aria-label="Filter by party"><option value="">All Parties</option></select>
+      </div>
+      <div class="filter-group">
+        <label class="filter-label" for="searchInput">Search Candidate</label>
+        <input type="text" id="searchInput" placeholder="Name…" aria-label="Search by candidate name" autocomplete="off">
+      </div>
+      <button class="filter-reset" onclick="resetFilters()" aria-label="Reset all filters">Reset</button>
+      <div class="filter-count" id="filterCount" aria-live="polite" aria-atomic="true"></div>
+    </div>
+
+    <!-- Candidate detail panel -->
+    <div class="detail-panel" id="detailPanel" role="region" aria-label="Candidate details">
+      <button class="detail-close" onclick="closeDetail()" aria-label="Close candidate details">✕</button>
+      <div class="detail-header" id="detailName"></div>
+      <div class="detail-party" id="detailParty"></div>
+      <div id="detailBody"></div>
+    </div>
+
+    <div class="table-section">
+      <div class="table-header">
+        <span class="table-title">All Candidates</span>
+        <button class="export-btn" onclick="exportCSV()" aria-label="Export filtered candidates as CSV">⬇ Export CSV</button>
+      </div>
+      <div class="table-wrap">
+        <table aria-label="Candidates table">
+          <thead>
+            <tr>
+              <th tabindex="0" onclick="sortTable('candidate')" onkeydown="if(event.key==='Enter')sortTable('candidate')" id="th-candidate" aria-sort="none">Candidate<span class="sort-arrow" aria-hidden="true"></span></th>
+              <th tabindex="0" onclick="sortTable('party')"     onkeydown="if(event.key==='Enter')sortTable('party')"     id="th-party"     aria-sort="none">Party<span class="sort-arrow" aria-hidden="true"></span></th>
+              <th tabindex="0" onclick="sortTable('ward')"      onkeydown="if(event.key==='Enter')sortTable('ward')"      id="th-ward"      aria-sort="none">Ward<span class="sort-arrow" aria-hidden="true"></span></th>
+              <th tabindex="0" onclick="sortTable('agent')"     onkeydown="if(event.key==='Enter')sortTable('agent')"     id="th-agent"     aria-sort="none">Agent<span class="sort-arrow" aria-hidden="true"></span></th>
+            </tr>
+          </thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ AGENTS ════════════════════════════════════════ -->
+  <div class="tab-content" id="tab-agents" role="tabpanel" aria-label="Election agents">
+    <div class="agents-section">
+      <details class="agent-explainer">
+        <summary class="agent-explainer-title">What is an election agent?</summary>
+        <div class="agent-explainer-body">
+          <p>An election agent is the person legally responsible for managing a candidate's campaign during an election. Every candidate must appoint an agent, and that person is accountable for ensuring the campaign follows electoral law.</p>
+          <p>The election agent handles key administrative duties such as submitting official paperwork, managing campaign spending and donations, and ensuring all reporting requirements are met. In many cases, they also act as the main point of contact between the candidate and the local returning officer.</p>
+          <p>While candidates often appear publicly during campaigns, the election agent is the person who carries the legal responsibility for how the campaign is run behind the scenes. If rules are breached, it is typically the agent who is held accountable rather than the candidate alone.</p>
+          <p>Election agents must comply with strict spending limits and reporting deadlines set by the Electoral Commission. After the election, they are required to submit detailed expense returns that are published for public transparency.</p>
+        </div>
+      </details>
+    </div>
+    <div class="agents-section">
+      <div class="agents-title">All Election Agents</div>
+      <div class="agents-subtitle" id="agentsSubtitle"></div>
+      <div id="agentList"></div>
+    </div>
+  </div>
+
+  <!-- ══ ABOUT ══════════════════════════════════════════ -->
+  <div class="tab-content" id="tab-about" role="tabpanel" aria-label="About this dashboard">
+    <div class="about-section">
+      <div class="about-title">About This Dashboard</div>
+      <div class="about-body">
+        <p>This dashboard is built by Plymouth Political Watch as an independent election tracking tool designed to make local political information easier to access and understand.</p>
+        <p>Instead of digging through long council PDFs or scattered notices, this platform presents candidates, wards, and election data in a clear, structured, and searchable format. It is built for speed, clarity, and transparency — giving the public a faster way to see what is happening in local elections as information is released.</p>
+        <p>This is an independent project and is not affiliated with any party or council. Data is sourced from official publications where available, but no guarantee is made regarding accuracy or completeness.</p>
+        <p>You may find us on <a href="https://facebook.com/plymouthpolitics" target="_blank" rel="noopener noreferrer">facebook.com/plymouthpolitics</a> if you believe there is an error or wish to get in touch. Candidates may also contact us to update or add their contact details to the dashboard.</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  <span>Source: Plymouth City Council · Statement of Persons Nominated &amp; Election Agents Notice · 9 April 2026</span>
+  <span style="max-width:600px;text-align:right">© Plymouth Political Watch. This dashboard is independently produced and maintained and is not official or affiliated with any party or council. No warranty is provided regarding accuracy, reliability, or completeness. Use at your own discretion.</span>
+</footer>
+
+<script>
+'use strict';
+
+/* ═══════════════════════════════════════════════════════════════════
+   CONFIGURATION
+═══════════════════════════════════════════════════════════════════ */
+
+/**
+ * Google Sheets published CSV export URL.
+ * To use: File → Share → Publish to web → CSV → copy link.
+ * Expected columns (row 1 = headers):
+ *   Candidate, Party, Ward, Agent, AgentAddr,
+ *   CandidateAddr, Email, Phone, Facebook, Twitter
+ *
+ * Set to null to use the embedded FALLBACK_DATA instead.
+ */
+const SHEETS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQVvgnixtYZovBzm0uBhwMsFMoQuYqq_s_mJGYaWpDUP_EIbHjVlAjGys4OJSmLXR-cuKSIjFerE4gf/pub?output=csv';
+
+/**
+ * Ward seat configuration.
+ * Used to compute candidates-per-seat ratio.
+ * All Plymouth wards elect 3 councillors (one per year in a 4-year cycle;
+ * in a full-council election each ward elects 1 seat).
+ * Adjust if different wards have different seat counts.
+ */
+const WARD_META = {
+  'Budshead':                  { seats: 1 },
+  'Compton':                   { seats: 1 },
+  'Devonport':                 { seats: 1 },
+  'Drake':                     { seats: 1 },
+  'Efford and Lipson':         { seats: 1 },
+  'Eggbuckland':               { seats: 1 },
+  'Ham':                       { seats: 1 },
+  'Honicknowle':               { seats: 1 },
+  'Moor View':                 { seats: 1 },
+  'Peverell':                  { seats: 1 },
+  'Plympton Chaddlewood':      { seats: 1 },
+  'Plympton St Mary':          { seats: 1 },
+  'Plymstock Dunstone':        { seats: 1 },
+  'Plymstock Radford':         { seats: 1 },
+  'Southway':                  { seats: 1 },
+  'St Budeaux':                { seats: 1 },
+  'St Peter and the Waterfront': { seats: 1 },
+  'Stoke':                     { seats: 1 },
+  'Sutton and Mount Gould':    { seats: 1 },
+};
+
+/** Party colour map — no ordering hierarchy, lookup only. */
+const PARTY_COLORS = {
+  'Conservative':      '#3b82f6',
+  'Labour':            '#ef4444',
+  'Liberal Democrats': '#f59e0b',
+  'Green Party':       '#22c55e',
+  'Reform UK':         '#8b5cf6',
+  'TUSC':              '#f97316',
+  'Independent':       '#94a3b8',
+};
+const partyColor = p => PARTY_COLORS[p] || '#64748b';
+
+/** Canonical data used if Google Sheets is unavailable or not configured. */
+const FALLBACK_DATA = [
+  {candidate:'Charlie Carson',party:'Conservative',ward:'Budshead',agent:'John L Arthur',agentAddr:'94 Powisland Drive, Plymouth, PL6 6AE',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Nicola Cooke',party:'Reform UK',ward:'Budshead',agent:'Nicola Cooke',agentAddr:'100 Taunton Avenue, Plymouth, PL5 4ES',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Dave Downie',party:'Independent',ward:'Budshead',agent:'Tania Joanne Downie',agentAddr:'6 Lancaster Gardens, Whitleigh, Plymouth, PL5 4AA',candidateAddr:'32 Saddlers Way, Plymouth, PL5 4EH'},
+  {candidate:'Hilary Colvill Fursdon',party:'Green Party',ward:'Budshead',agent:'Hilary Colvill Fursdon',agentAddr:'123 Hooe Road, Plymouth, PL9 9NJ',candidateAddr:'123 Hooe Road, Plymouth, PL9 9NJ'},
+  {candidate:'Howard Ian Simpson',party:'Labour',ward:'Budshead',agent:'Ruth Nation',agentAddr:'Plymouth Labour Party, Lockyer Hall, 1A Alfred Street, Plymouth, PL1 2RP',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Jim Spencer',party:'Liberal Democrats',ward:'Budshead',agent:'Dennis Sidney Draper',agentAddr:'58 Bowden Park Road, Crown Hill, Plymouth, PL6 5NG',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Richard Veysey Bray',party:'Liberal Democrats',ward:'Compton',agent:'Dylan James Tippetts',agentAddr:'17 Thornhill Road, Mannamead, Plymouth, PL3 5NF',candidateAddr:'17 Thornhill Road, Plymouth, PL3 5NF'},
+  {candidate:'James Stephen Chesson',party:'Labour',ward:'Compton',agent:'Kate Taylor',agentAddr:'Plymouth Labour Party, Lockyer Hall, 1A Alfred Street, Plymouth, PL1 2RP',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Ellie Alicia Crockett',party:'Green Party',ward:'Compton',agent:'Hilary Colvill Fursdon',agentAddr:'123 Hooe Road, Plymouth, PL9 9NJ',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Richard William Evans',party:'Conservative',ward:'Compton',agent:'John Mahony',agentAddr:'41 St Michaels Terrace, Plymouth, PL1 4QG',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Helen Mary Kelly',party:'Reform UK',ward:'Compton',agent:'Helen Mary Kelly',agentAddr:'110 Mannamead Road, Mannamead, Plymouth, PL3 5QH',candidateAddr:'110 Mannamead Road, Mannamead, Plymouth, PL3 5QH'},
+  {candidate:'Lesley Faith Duncan',party:'TUSC',ward:'Devonport',agent:'Alexandra Sampson',agentAddr:'28 Glendower Road, Peverell, Plymouth, PL3 4LA',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Ian Thomas Fleming',party:'Conservative',ward:'Devonport',agent:'Kevin Kelway',agentAddr:'Flat 5, 4 The Esplanade, Hoe, Plymouth, PL1 2PJ',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Alan Peter Jagodzinski',party:'Liberal Democrats',ward:'Devonport',agent:'Dylan James Tippetts',agentAddr:'17 Thornhill Road, Mannamead, Plymouth, PL3 5NF',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Simon David Pannett',party:'Green Party',ward:'Devonport',agent:'Simon David Pannett',agentAddr:'Flat J, 80 Paradise Road, Plymouth, PL1 5QR',candidateAddr:'Flat J, 80 Paradise Road, Plymouth, PL1 5QR'},
+  {candidate:'Paul Victor Rielly',party:'Reform UK',ward:'Devonport',agent:'Paul Victor Rielly',agentAddr:'30 St Vincent Street, Plymouth, PL2 1JH',candidateAddr:'(address in Plymouth)'},
+  {candidate:'David James Rixon',party:'Independent',ward:'Devonport',agent:'David James Rixon',agentAddr:'99 Wolseley Road, Ford, Plymouth, PL2 3BL',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Bill Stevens',party:'Labour',ward:'Devonport',agent:'Anne Freeman',agentAddr:'74 Pottery Road, Plymouth, PL1 4FL',candidateAddr:'48 Edgcumbe Park Road, Plymouth, PL3 4NL'},
+  {candidate:'Saahi Aroori',party:'Green Party',ward:'Drake',agent:'Hilary Colvill Fursdon',agentAddr:'123 Hooe Road, Plymouth, PL9 9NJ',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Tim Blazevic',party:'Conservative',ward:'Drake',agent:'John Mahony',agentAddr:'41 St Michaels Terrace, Plymouth, PL1 4QG',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Edward Jack Evans',party:'TUSC',ward:'Drake',agent:'Alexandra Sampson',agentAddr:'28 Glendower Road, Peverell, Plymouth, PL3 4LA',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Mark Timothy Edward Ingall',party:'Liberal Democrats',ward:'Drake',agent:'Dylan James Tippetts',agentAddr:'17 Thornhill Road, Mannamead, Plymouth, PL3 5NF',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Mark Winter Ingrouille',party:'Reform UK',ward:'Drake',agent:'Mark Winter Ingrouille',agentAddr:'79 Mills Bakery, 4 Royal William Yard, Plymouth, PL1 3GD',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Chelsea Marie Shelton',party:'Labour',ward:'Drake',agent:'Charlotte Marie Holloway',agentAddr:'Plymouth Labour Party, Lockyer Hall, 1A Alfred Street, Plymouth, PL1 2RP',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Chaz Singh',party:'Independent',ward:'Drake',agent:'Paul A R Reeby',agentAddr:'46 Stangray Avenue, Plymouth, PL4 6PT',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Nik Brookson',party:'TUSC',ward:'Efford and Lipson',agent:'Alexandra Sampson',agentAddr:'28 Glendower Road, Peverell, Plymouth, PL3 4LA',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Pat Bushell',party:'Green Party',ward:'Efford and Lipson',agent:'Hilary Colvill Fursdon',agentAddr:'123 Hooe Road, Plymouth, PL9 9NJ',candidateAddr:'8 Queens Road, Lipson, Plymouth, PL4 7PJ'},
+  {candidate:'Neil Keith Hendy',party:'Labour',ward:'Efford and Lipson',agent:'Pauline Pearl Murphy',agentAddr:'Plymouth Labour Party, Lockyer Hall, 1A Alfred Street, Plymouth, PL1 2RP',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Alex Primmer',party:'Liberal Democrats',ward:'Efford and Lipson',agent:'Steven Guy',agentAddr:'45 Amherst Road, Plymouth, PL3 4HJ',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Chris Sharpe',party:'Reform UK',ward:'Efford and Lipson',agent:'Christopher Dereck Parker Sharpe',agentAddr:'Flat 10 Alexandra Court, 139-141 Alexandra Road, Plymouth, PL2 1JY',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Edmund Harold Shillabeer',party:'Conservative',ward:'Efford and Lipson',agent:'Anthony Edward Carson',agentAddr:'Wollaton House, Brixton, Plymouth, PL8 2DL',candidateAddr:'"Ten Tors", No. 10 Tor Road, Hartley, Plymouth, PL3 5TD'},
+  {candidate:'Dennis Sidney Draper',party:'Liberal Democrats',ward:'Eggbuckland',agent:'Dennis Sidney Draper',agentAddr:'58 Bowden Park Road, Crownhill, Plymouth, PL6 5NG',candidateAddr:'58 Bowden Park Road, Crownhill, Plymouth, PL6 5NG'},
+  {candidate:'Lorna Peggy Amelia Gaskin',party:'Green Party',ward:'Eggbuckland',agent:'Hilary Colvill Fursdon',agentAddr:'123 Hooe Road, Plymouth, PL9 9NJ',candidateAddr:'45 Hilton Avenue, Plymouth, PL5 3HS'},
+  {candidate:'Paul Hagan',party:'Reform UK',ward:'Eggbuckland',agent:'Paul Hagan',agentAddr:'58 Bearsdown Road, Eggbuckland, Plymouth, PL6 5TR',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Kevin Michael Neil',party:'Independent',ward:'Eggbuckland',agent:'Kevin Michael Neil',agentAddr:'27 Frogmore Avenue, Eggbuckland, Plymouth, PL6 5XH',candidateAddr:'27 Frogmore Avenue, Eggbuckland, Plymouth, PL6 5XH'},
+  {candidate:'Seb Soper',party:'Labour',ward:'Eggbuckland',agent:'Lewis Charles Eynon',agentAddr:'Plymouth Labour Party, Lockyer Hall, 1A Alfred Street, Plymouth, PL1 2RP',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Chip Tofan',party:'Conservative',ward:'Eggbuckland',agent:'Margaret Francis Dorothy Boadella',agentAddr:'Eurotec House, Burrington Way, Plymouth, PL5 3LZ',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Josh Ayres',party:'Green Party',ward:'Ham',agent:'Hilary Colvill Fursdon',agentAddr:'123 Hooe Road, Plymouth, PL9 9NJ',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Charlotte Elizabeth Carlyle',party:'Conservative',ward:'Ham',agent:'John A M McCurdy',agentAddr:'12 Widewell Road, Plymouth, PL6 7DN',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Stephen Thomas Hulme',party:'Independent',ward:'Ham',agent:'Stephen Thomas Hulme',agentAddr:'101 Merrivale Road, Plymouth, PL2 2RP',candidateAddr:'101 Merrivale Road, Plymouth, PL2 2RP'},
+  {candidate:'Kara Odinsdottir',party:'TUSC',ward:'Ham',agent:'Alexandra Sampson',agentAddr:'28 Glendower Road, Peverell, Plymouth, PL3 4LA',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Tim Parkin',party:'Liberal Democrats',ward:'Ham',agent:'Michael R Gillbard',agentAddr:'Flat 8, 92 Alma Road, Plymouth, PL3 4HD',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Ben David Rowe',party:'Reform UK',ward:'Ham',agent:'Ben David Rowe',agentAddr:'1 Defoe Close, Plymouth, PL5 3LL',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Tina Tuohy',party:'Labour',ward:'Ham',agent:'Kate Taylor',agentAddr:'Plymouth Labour Party, Lockyer Hall, 1A Alfred Street, Plymouth, PL1 2RP',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Margaret Francis Dorothy Boadella',party:'Conservative',ward:'Honicknowle',agent:'John A M McCurdy',agentAddr:'12 Widewell Road, Plymouth, PL6 7DN',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Frank Hartkopf',party:'Green Party',ward:'Honicknowle',agent:'Frank Hartkopf',agentAddr:'12 Sea View Avenue, Plymouth, PL4 8RU',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Shaun Andrew Hooper',party:'Reform UK',ward:'Honicknowle',agent:'Shaun Andrew Hooper',agentAddr:'24 Clittaford View, Plymouth, PL6 6TW',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Magda Janczak-Hogarth',party:'Liberal Democrats',ward:'Honicknowle',agent:'Dylan James Tippetts',agentAddr:'17 Thornhill Road, Mannamead, Plymouth, PL3 5NF',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Tina Anne Scott',party:'Labour',ward:'Honicknowle',agent:'Cathy Wood',agentAddr:'Plymouth Labour Party, Lockyer Hall, 1A Alfred Street, Plymouth, PL1 2RP',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Andrew David Crumplin',party:'Reform UK',ward:'Moor View',agent:'Andrew David Crumplin',agentAddr:'6 Oldlands Close, Roborough, PL6 6AU',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Caroline Ann Mills',party:'Conservative',ward:'Moor View',agent:'John A M McCurdy',agentAddr:'12 Widewell Road, Plymouth, PL6 7DN',candidateAddr:'4 Copleston Road, Southway, Plymouth, PL6 6RR'},
+  {candidate:'Aiden Nicholls',party:'Green Party',ward:'Moor View',agent:'Hilary Colvill Fursdon',agentAddr:'123 Hooe Road, Plymouth, PL9 9NJ',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Jacqui Spencer',party:'Liberal Democrats',ward:'Moor View',agent:'Dennis Sidney Draper',agentAddr:'58 Bowden Park Road, Crown Hill, Plymouth, PL6 5NG',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Andy White',party:'TUSC',ward:'Moor View',agent:'Alexandra Sampson',agentAddr:'28 Glendower Road, Peverell, Plymouth, PL3 4LA',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Nicky Williams',party:'Labour',ward:'Moor View',agent:'Theresa Blight',agentAddr:'Plymouth Labour Party, Lockyer Hall, 1A Alfred Street, Plymouth, PL1 2RP',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Stuart Andrew Bonar',party:'Liberal Democrats',ward:'Peverell',agent:'Michael R Gillbard',agentAddr:'Flat 8, 92 Alma Road, Plymouth, PL3 4HD',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Nicholas John Casley',party:'Green Party',ward:'Peverell',agent:'Hilary Colvill Fursdon',agentAddr:'123 Hooe Road, Plymouth, PL9 9NJ',candidateAddr:'94 Glendower Road, Peverell, Plymouth, PL3 4LD'},
+  {candidate:'Jeremy Goslin',party:'Labour',ward:'Peverell',agent:'Charlotte Marie Holloway',agentAddr:'Plymouth Labour Party, Lockyer Hall, 1A Alfred Street, Plymouth, PL1 2RP',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Luke David Hudson',party:'Reform UK',ward:'Peverell',agent:'Luke David Hudson',agentAddr:'Flat 6, 1 Lulworth Drive, Plymouth, PL6 7DT',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Alison Stallard',party:'TUSC',ward:'Peverell',agent:'Alexandra Sampson',agentAddr:'28 Glendower Road, Peverell, Plymouth, PL3 4LA',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Colin Edward Wells',party:'Conservative',ward:'Peverell',agent:'Alison Nix',agentAddr:'4 Lentney Close, Heybrook Bay, Plymouth, PL9 0DU',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Ben Antony Ferrier',party:'Liberal Democrats',ward:'Plympton Chaddlewood',agent:'Steven Guy',agentAddr:'45 Amherst Road, Plymouth, PL3 4HJ',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Ben Manning',party:'Conservative',ward:'Plympton Chaddlewood',agent:'Timothy Lever',agentAddr:'South West Devon Conservative Association, Ivybridge Constitutional Club, Blatchford Road, Ivybridge, Devon, PL21 0AD',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Chris Mavin',party:'Labour',ward:'Plympton Chaddlewood',agent:'John Stephens',agentAddr:'Plymouth Labour Party, Lockyer Hall, 1A Alfred Street, Plymouth, PL1 2RP',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Zoe Philippa Ann Reilly',party:'Green Party',ward:'Plympton Chaddlewood',agent:'Hilary Colvill Fursdon',agentAddr:'123 Hooe Road, Plymouth, PL9 9NJ',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Angie Smith',party:'Reform UK',ward:'Plympton Chaddlewood',agent:'Angela Mary-Rose Smith',agentAddr:'39 Wheatridge, Woodford, Plympton, Plymouth, PL7 4QZ',candidateAddr:'39 Wheatridge, Woodford, Plympton, Plymouth, PL7 4QZ'},
+  {candidate:'Nicky Trevaskis',party:'Independent',ward:'Plympton Chaddlewood',agent:'Andrea V Loveridge',agentAddr:'30 Canhaye Close, Plymouth, PL7 1PG',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Maddi Bridgeman',party:'Independent',ward:'Plympton St Mary',agent:'Patrick John Nicholson',agentAddr:'82 Priory Drive, Plympton, Plymouth, PL7 1PX',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Ioana-Cristina Draper',party:'Liberal Democrats',ward:'Plympton St Mary',agent:'Dennis Sidney Draper',agentAddr:'58 Bowden Park Road, Crown Hill, Plymouth, PL6 5NG',candidateAddr:'58 Bowden Park Road, Crownhill, Plymouth, PL6 5NG'},
+  {candidate:'Robin Furner',party:'Green Party',ward:'Plympton St Mary',agent:'Hilary Colvill Fursdon',agentAddr:'123 Hooe Road, Plymouth, PL9 9NJ',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Natalie Sara Harrison',party:'Conservative',ward:'Plympton St Mary',agent:'Timothy Lever',agentAddr:'South West Devon Conservative Association, Ivybridge Constitutional Club, Blatchford Road, Ivybridge, Devon, PL21 0AD',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Vanessa Glynis Tyler',party:'Reform UK',ward:'Plympton St Mary',agent:'Vanessa Glynis Tyler',agentAddr:'17 Dartmoor Cottages, Wotter, Shaugh Prior, PL7 5HN',candidateAddr:'(address in South Hams)'},
+  {candidate:'Julia Annette Elsie Wildman',party:'Labour',ward:'Plympton St Mary',agent:'John Stephens',agentAddr:'Plymouth Labour Party, Lockyer Hall, 1A Alfred Street, Plymouth, PL1 2RP',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Steven Guy',party:'Liberal Democrats',ward:'Plymstock Dunstone',agent:'Steven Guy',agentAddr:'45 Amherst Road, Plymouth, PL3 4HJ',candidateAddr:'45 Amherst Road, Plymouth, PL3 4HJ'},
+  {candidate:'Andy Lugger',party:'Conservative',ward:'Plymstock Dunstone',agent:'Gareth Benjamin Streeter',agentAddr:'SWDCA, Ivybridge Constitutional Club, 1 Blanchford, Ivybridge, Devon, PL21 0AD',candidateAddr:'(address in Plymouth)'},
+  {candidate:"Sara Leah O'Hanlon",party:'Green Party',ward:'Plymstock Dunstone',agent:'Hilary Colvill Fursdon',agentAddr:'123 Hooe Road, Plymouth, PL9 9NJ',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Alistair Philpot',party:'Labour',ward:'Plymstock Dunstone',agent:'John Stephens',agentAddr:'Plymouth Labour Party, Lockyer Hall, 1A Alfred Street, Plymouth, PL1 2RP',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Grace Stickland',party:'Reform UK',ward:'Plymstock Dunstone',agent:'Brian Norminton',agentAddr:'63 Candish Drive, Elburton, Plymouth, PL9 8DB',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Simon David Adderley',party:'Green Party',ward:'Plymstock Radford',agent:'Hilary Colvill Fursdon',agentAddr:'123 Hooe Road, Plymouth, PL9 9NJ',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Elena Cornelia Agapescu',party:'Labour',ward:'Plymstock Radford',agent:'John Stephens',agentAddr:'Plymouth Labour Party, Lockyer Hall, 1A Alfred Street, Plymouth, PL1 2RP',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Peter Gold',party:'Reform UK',ward:'Plymstock Radford',agent:'Margaret A Lawrence',agentAddr:'4 Copse Close, Plymouth, PL7 1QD',candidateAddr:'(address in South Hams)'},
+  {candidate:'John Mahony',party:'Conservative',ward:'Plymstock Radford',agent:'Gareth Benjamin Streeter',agentAddr:'SWDCA, Ivybridge Constitutional Club, 1 Blanchford, Ivybridge, Devon, PL21 0AD',candidateAddr:'Picket Rock, Renney Road, Plymouth, PL9 0BG'},
+  {candidate:'Roy John Minden Plumley',party:'Liberal Democrats',ward:'Plymstock Radford',agent:'Steven Guy',agentAddr:'45 Amherst Road, Plymouth, PL3 4HJ',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Simon Geoffrey Batchelor',party:'Liberal Democrats',ward:'Southway',agent:'Dylan James Tippetts',agentAddr:'17 Thornhill Road, Mannamead, Plymouth, PL3 5NF',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Anthony Richard Bligh',party:'TUSC',ward:'Southway',agent:'Alexandra Sampson',agentAddr:'28 Glendower Road, Peverell, Plymouth, PL3 4LA',candidateAddr:'(address in Devon)'},
+  {candidate:'Dan Browning',party:'Green Party',ward:'Southway',agent:'Hilary Colvill Fursdon',agentAddr:'123 Hooe Road, Plymouth, PL9 9NJ',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Jon Dredge',party:'Independent',ward:'Southway',agent:'Jonathan Ian Dredge',agentAddr:'46 Stenlake Terrace, Prince Rock, Plymouth, PL4 9LA',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Jean Margaret Hebson',party:'Labour',ward:'Southway',agent:'Keith Michael Moore',agentAddr:'Plymouth Labour Party, Lockyer Hall, 1A Alfred Street, Plymouth, PL1 2RP',candidateAddr:'(address in Plymouth)'},
+  {candidate:'John Arthur Morris McCurdy',party:'Conservative',ward:'Southway',agent:'John Arthur Morris McCurdy',agentAddr:'12 Widewell Road, Plymouth, PL6 7DN',candidateAddr:'12 Widewell Road, Plymouth, PL6 7DN'},
+  {candidate:'Jacqueline Sansom',party:'Reform UK',ward:'Southway',agent:'Jacqueline Sansom',agentAddr:'24 Clittaford View, Plymouth, PL6 6TW',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Jon Christopher Anderson',party:'Green Party',ward:'St Budeaux',agent:'Hilary Colvill Fursdon',agentAddr:'123 Hooe Road, Plymouth, PL9 9NJ',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Joanne Bowden',party:'Labour',ward:'St Budeaux',agent:'Ruth Nation',agentAddr:'Plymouth Labour Party, Lockyer Hall, 1A Alfred Street, Plymouth, PL1 2RP',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Mark Kevin Deacon',party:'Conservative',ward:'St Budeaux',agent:'John A M McCurdy',agentAddr:'12 Widewell Road, Plymouth, PL6 7DN',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Mark Anthony Hadfield',party:'Reform UK',ward:'St Budeaux',agent:'Mark Anthony Hadfield',agentAddr:'359 Fort Austin Avenue, Plymouth, PL6 5TG',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Ryan John Aldred',party:'TUSC',ward:'St Peter and the Waterfront',agent:'Ryan John Aldred',agentAddr:'32 Beatrice Avenue, Lipson, Plymouth, PL4 8QB',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Rachel Jehana Ali',party:'Green Party',ward:'St Peter and the Waterfront',agent:'Hilary Colvill Fursdon',agentAddr:'123 Hooe Road, Plymouth, PL9 9NJ',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Benjamin Barton',party:'Independent',ward:'St Peter and the Waterfront',agent:'Benjamin Barton',agentAddr:'85 Stuart Road, Plymouth, PL1 5LP',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Hugh Janes',party:'Liberal Democrats',ward:'St Peter and the Waterfront',agent:'Michael R Gillbard',agentAddr:'Flat 8, 92 Alma Road, Plymouth, PL3 4HD',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Kevin John Kelway',party:'Conservative',ward:'St Peter and the Waterfront',agent:'Ian Fleming',agentAddr:'Flat 5, 4 Esplanade, The Hoe, Plymouth, PL1 2PJ',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Alison Jane Raynsford',party:'Labour',ward:'St Peter and the Waterfront',agent:'Christopher John Penberthy',agentAddr:'Plymouth Labour Party, Lockyer Hall, 1A Alfred Street, Plymouth, PL1 2RP',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Andy Rose',party:'Reform UK',ward:'St Peter and the Waterfront',agent:'Andre Trevor Rose',agentAddr:'First Floor Flat, 25 St James Place West, Plymouth, PL1 3AT',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Tom Briars-Delve',party:'Labour',ward:'Stoke',agent:'Michael Charles John Fletcher',agentAddr:'Plymouth Labour Party, Lockyer Hall, 1A Alfred Street, Plymouth, PL1 2RP',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Jacqui Cant',party:'Independent',ward:'Stoke',agent:'Jacqueline Anne Cant',agentAddr:'Flat 1 Chapter One, 19 Albert Road, Plymouth, PL2 1AN',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Jess Duffy',party:'Green Party',ward:'Stoke',agent:'Hilary Colvill Fursdon',agentAddr:'123 Hooe Road, Plymouth, PL9 9NJ',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Ehren John Duke',party:'Conservative',ward:'Stoke',agent:'John Mahony',agentAddr:'41 St Michaels Terrace, Plymouth, PL1 4QG',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Helen Catherine Guy',party:'Liberal Democrats',ward:'Stoke',agent:'Steven Guy',agentAddr:'45 Amherst Road, Plymouth, PL3 4HJ',candidateAddr:'45 Amherst Road, Plymouth, PL3 4HJ'},
+  {candidate:'Alex Moore',party:'TUSC',ward:'Stoke',agent:'Alexandra Sampson',agentAddr:'28 Glendower Road, Peverell, Plymouth, PL3 4LA',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Nigel Anthony Theyer',party:'Reform UK',ward:'Stoke',agent:'Nigel Anthony Theyer',agentAddr:'Apartment 55, 1 Grand Hotel Road, Plymouth, PL1 2PQ',candidateAddr:'Apartment 55, 1 Grand Hotel Road, Plymouth, PL1 2PQ'},
+  {candidate:'Mary Elizabeth Aspinall',party:'Labour',ward:'Sutton and Mount Gould',agent:'Sue Dann',agentAddr:'Plymouth Labour Party, Lockyer Hall, 1A Alfred Street, Plymouth, PL1 2RP',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Fleur Olivia Stoner Ball',party:'Liberal Democrats',ward:'Sutton and Mount Gould',agent:'Michael R Gillbard',agentAddr:'Flat 8, 92 Alma Road, Plymouth, PL3 4HD',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Lee Bunker',party:'Reform UK',ward:'Sutton and Mount Gould',agent:'Lee Bunker',agentAddr:'8 Madden Road, Plymouth, PL1 4NE',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Byran John Driver',party:'Green Party',ward:'Sutton and Mount Gould',agent:'Hilary Colvill Fursdon',agentAddr:'123 Hooe Road, Plymouth, PL9 9NJ',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Alexandra Sampson',party:'TUSC',ward:'Sutton and Mount Gould',agent:'Alexandra Sampson',agentAddr:'28 Glendower Road, Peverell, Plymouth, PL3 4LA',candidateAddr:'(address in Plymouth)'},
+  {candidate:'Robert Zajko',party:'Conservative',ward:'Sutton and Mount Gould',agent:'Anthony Edward Carson',agentAddr:'Wollaton House, Brixton, Plymouth, PL8 2DL',candidateAddr:'(address in Plymouth)'},
+];
+
+/* ═══════════════════════════════════════════════════════════════════
+   STATE
+═══════════════════════════════════════════════════════════════════ */
+let CANDIDATES = [];          // immutable source of truth after load
+let filteredCandidates = [];  // table + CSV only
+let statsCache = null;        // memoised computeStats result
+let sortCol = 'candidate';
+let sortDir = 'asc';
+let selectedId = null;
+let wChart = null;
+let pChart = null;
+
+/* ═══════════════════════════════════════════════════════════════════
+   DATA LOADING  (Google Sheets CSV → fallback to embedded data)
+═══════════════════════════════════════════════════════════════════ */
+
+/** Normalise a CSV header to a camelCase field name. */
+function headerToKey(h) {
+  const map = {
+    'candidate':        'candidate',
+    'party':            'party',
+    'ward':             'ward',
+    'agent':            'agent',
+    'agentaddr':        'agentAddr',
+    'agent address':    'agentAddr',
+    'candidateaddr':    'candidateAddr',
+    'candidate address':'candidateAddr',
+    'email':            'email',
+    'phone':            'phone',
+    'facebook':         'facebook',
+    'twitter':          'twitter',
+  };
+  return map[h.toLowerCase().trim()] || h.toLowerCase().trim();
+}
+
+/** Parse a CSV string into an array of objects. Handles quoted fields. */
+function parseCSV(text) {
+  const lines = text.trim().split(/\r?\n/);
+  if (lines.length < 2) return [];
+  const headers = lines[0].split(',').map(headerToKey);
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = splitCSVLine(lines[i]);
+    if (cols.every(c => !c.trim())) continue; // skip blank rows
+    const row = {};
+    headers.forEach((h, j) => { row[h] = (cols[j] || '').trim(); });
+    rows.push(row);
+  }
+  return rows;
+}
+
+/** Split a single CSV line respecting quoted fields. */
+function splitCSVLine(line) {
+  const result = [];
+  let cur = '';
+  let inQuote = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQuote && line[i + 1] === '"') { cur += '"'; i++; }
+      else { inQuote = !inQuote; }
+    } else if (ch === ',' && !inQuote) {
+      result.push(cur); cur = '';
+    } else {
+      cur += ch;
+    }
+  }
+  result.push(cur);
+  return result;
+}
+
+/** Assign stable numeric IDs and ensure all optional fields exist. */
+function normaliseRows(rows) {
+  return rows.map((r, i) => ({
+    id:            i,
+    candidate:     r.candidate     || '',
+    party:         r.party         || '',
+    ward:          r.ward          || '',
+    agent:         r.agent         || '',
+    agentAddr:     r.agentAddr     || '',
+    candidateAddr: r.candidateAddr || '',
+    email:         r.email         || '',
+    phone:         r.phone         || '',
+    facebook:      r.facebook      || '',
+    twitter:       r.twitter       || '',
+  })).filter(r => r.candidate && r.ward); // drop empty rows
+}
+
+/** Show the error banner with a message. */
+function showError(msg) {
+  const el = document.getElementById('error-banner');
+  el.textContent = msg;
+  el.classList.add('visible');
+}
+
+/** Hide the loading overlay once data is ready. */
+function hideLoading() {
+  const el = document.getElementById('loading-overlay');
+  el.classList.add('hidden');
+  setTimeout(() => { el.style.display = 'none'; }, 450);
+}
+
+/**
+ * Load data: attempt Google Sheets CSV first, fall back to embedded data.
+ * Returns a Promise that resolves to the normalised candidate array.
+ */
+async function loadData() {
+  if (!SHEETS_CSV_URL) {
+    return normaliseRows(FALLBACK_DATA);
+  }
+  try {
+    const res = await fetch(SHEETS_CSV_URL);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const text = await res.text();
+    const rows = parseCSV(text);
+    if (!rows.length) throw new Error('Empty sheet');
+    return normaliseRows(rows);
+  } catch (err) {
+    console.warn('Google Sheets fetch failed, using embedded data.', err);
+    showError(`Could not load live data (${err.message}). Showing built-in dataset.`);
+    return normaliseRows(FALLBACK_DATA);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   STATISTICS  (memoised — always computed from full CANDIDATES)
+═══════════════════════════════════════════════════════════════════ */
+
+/**
+ * Compute and cache core statistics from the immutable CANDIDATES array.
+ * Returns { wardCounts, partyCounts, agentMap }.
+ */
+function computeStats() {
+  if (statsCache) return statsCache;
+  const wardCounts  = {};
+  const partyCounts = {};
+  const agentMap    = {};
+
+  CANDIDATES.forEach(c => {
+    wardCounts[c.ward]   = (wardCounts[c.ward]   || 0) + 1;
+    partyCounts[c.party] = (partyCounts[c.party] || 0) + 1;
+    if (!agentMap[c.agent]) {
+      agentMap[c.agent] = { addr: c.agentAddr, candidates: [] };
+    }
+    agentMap[c.agent].candidates.push(c);
+  });
+
+  statsCache = { wardCounts, partyCounts, agentMap };
+  return statsCache;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   UNIFIED RENDER PIPELINE
+═══════════════════════════════════════════════════════════════════ */
+
+/** Render everything. Called once on init and never from filter handlers. */
+function renderAll() {
+  const stats = computeStats();
+  renderInsights(stats);
+  renderCharts(stats);
+  renderCoverage(stats);
+  renderWardCards();
+  renderAgents(stats);
+  renderTable();
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   URL STATE  (persist tab, filters, selected candidate)
+═══════════════════════════════════════════════════════════════════ */
+
+/** Read the current URL params and return a plain object. */
+function getUrlState() {
+  const p = new URLSearchParams(window.location.search);
+  return {
+    tab:      p.get('tab')    || 'overview',
+    ward:     p.get('ward')   || '',
+    party:    p.get('party')  || '',
+    search:   p.get('search') || '',
+    selected: p.get('id')     !== null ? parseInt(p.get('id'), 10) : null,
+  };
+}
+
+/** Push a new URL state without reloading the page. */
+function setUrlState(patch) {
+  const state = getUrlState();
+  const merged = { ...state, ...patch };
+  const p = new URLSearchParams();
+  if (merged.tab    && merged.tab !== 'overview') p.set('tab',    merged.tab);
+  if (merged.ward)   p.set('ward',   merged.ward);
+  if (merged.party)  p.set('party',  merged.party);
+  if (merged.search) p.set('search', merged.search);
+  if (merged.selected !== null && merged.selected !== undefined) p.set('id', merged.selected);
+  const qs = p.toString();
+  history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname);
+}
+
+/** Apply the URL state to the UI on initial load. */
+function restoreUrlState() {
+  const state = getUrlState();
+
+  // Tab
+  const tabBtn = document.querySelector(`[data-tab="${state.tab}"]`);
+  if (tabBtn) activateTab(tabBtn, false);
+
+  // Filters
+  const wf = document.getElementById('wardFilter');
+  const pf = document.getElementById('partyFilter');
+  const sf = document.getElementById('searchInput');
+  if (state.ward   && wf) wf.value = state.ward;
+  if (state.party  && pf) pf.value = state.party;
+  if (state.search && sf) sf.value = state.search;
+  if (state.ward || state.party || state.search) applyFilters(false);
+
+  // Selected candidate
+  if (state.selected !== null) {
+    openDetail(state.selected, false);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   TABS
+═══════════════════════════════════════════════════════════════════ */
+
+function switchTab(btn) {
+  activateTab(btn, true);
+}
+
+function activateTab(btn, pushState) {
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    b.classList.remove('active');
+    b.setAttribute('aria-selected', 'false');
+  });
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+
+  btn.classList.add('active');
+  btn.setAttribute('aria-selected', 'true');
+  const tabName = btn.dataset.tab;
+  document.getElementById('tab-' + tabName).classList.add('active');
+
+  // Charts must be re-drawn when their canvas becomes visible
+  if (tabName === 'overview') renderCharts(computeStats());
+
+  if (pushState) setUrlState({ tab: tabName });
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   INSIGHTS
+═══════════════════════════════════════════════════════════════════ */
+
+function renderInsights({ wardCounts, partyCounts }) {
+  const total    = CANDIDATES.length;
+  const numWards = Object.keys(wardCounts).length;
+
+  const maxWardCount = Math.max(...Object.values(wardCounts));
+  const topWards = Object.entries(wardCounts)
+    .filter(([, n]) => n === maxWardCount)
+    .map(([w]) => w).sort();
+
+  const maxPartyCount = Math.max(...Object.values(partyCounts));
+  const topParties = Object.entries(partyCounts)
+    .filter(([, n]) => n === maxPartyCount)
+    .map(([p]) => p).sort();
+
+  const numParties  = Object.keys(partyCounts).filter(p => p !== 'Independent').length;
+  const hasIndependents = !!partyCounts['Independent'];
+  const partiesDisplay = hasIndependents ? `${numParties} <span style="font-size:13px;color:var(--muted)">+ Independents</span>` : `${numParties}`;
+  const avgPerWard  = numWards ? (total / numWards).toFixed(1) : '—';
+
+  // Candidates-per-seat: sum all seats, divide total candidates
+  const totalSeats  = Object.values(WARD_META).reduce((s, m) => s + (m.seats || 0), 0);
+  const perSeat     = totalSeats ? (total / totalSeats).toFixed(1) : null;
+
+  const topWardFontSize  = topWards.length  > 1 ? '12px' : '14px';
+  const topPartyFontSize = topParties.length > 1 ? '12px' : '14px';
+
+  document.getElementById('insights').innerHTML = `
+    <div class="insight-card" aria-label="Total candidates: ${total}">
+      <div class="insight-label">Total Candidates</div>
+      <div class="insight-value">${total}</div>
+      <div class="insight-sub">across ${numWards} ward${numWards !== 1 ? 's' : ''}</div>
+    </div>
+    <div class="insight-card blue" aria-label="Most contested ward">
+      <div class="insight-label">Most Contested Ward${topWards.length > 1 ? ' (tied)' : ''}</div>
+      <div class="insight-value" style="font-size:${topWardFontSize};line-height:1.4">${topWards.join('<br>')}</div>
+      <div class="insight-sub">${maxWardCount} candidates${topWards.length > 1 ? ' each' : ''}</div>
+    </div>
+    <div class="insight-card green" aria-label="Leading party">
+      <div class="insight-label">Most Candidates${topParties.length > 1 ? ' (tied)' : ''}</div>
+      <div class="insight-value" style="font-size:${topPartyFontSize};line-height:1.4">${topParties.join('<br>')}</div>
+      <div class="insight-sub">${maxPartyCount} candidates${topParties.length > 1 ? ' each' : ''}</div>
+    </div>
+    <div class="insight-card orange" aria-label="${numParties} parties">
+      <div class="insight-label">Distinct Parties</div>
+      <div class="insight-value">${partiesDisplay}</div>
+      <div class="insight-sub">avg ${avgPerWard} candidates/ward</div>
+    </div>
+  `;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   CHARTS  (always from full CANDIDATES via computeStats)
+═══════════════════════════════════════════════════════════════════ */
+
+const TOOLTIP_STYLE = {
+  backgroundColor: '#1c2030',
+  borderColor:     '#252a38',
+  borderWidth:     1,
+  titleColor:      '#e2e8f0',
+  bodyColor:       '#94a3b8',
+  titleFont: { family: "'IBM Plex Mono', monospace", size: 11 },
+  bodyFont:  { family: "'IBM Plex Sans', sans-serif",  size: 12 },
+  padding: 10,
+};
+
+function renderCharts({ wardCounts, partyCounts }) {
+  // ── Ward chart: horizontal bar, ascending (most contested at top) ──
+  const wardEntries = Object.entries(wardCounts).sort((a, b) => a[1] - b[1]);
+  const maxWard     = Math.max(...wardEntries.map(([, n]) => n));
+
+  if (wChart) wChart.destroy();
+  wChart = new Chart(document.getElementById('wardChart'), {
+    type: 'bar',
+    data: {
+      labels:   wardEntries.map(([w]) => w),
+      datasets: [{
+        data:            wardEntries.map(([, n]) => n),
+        backgroundColor: wardEntries.map(([, n]) => n === maxWard ? '#e8c54766' : '#4fc3f71a'),
+        borderColor:     wardEntries.map(([, n]) => n === maxWard ? '#e8c547'   : '#4fc3f7'),
+        borderWidth: 1,
+        borderRadius: 2,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      indexAxis: 'y',
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          ...TOOLTIP_STYLE,
+          callbacks: {
+            label: ctx => ` ${ctx.raw} candidate${ctx.raw !== 1 ? 's' : ''}`,
+          },
+        },
+      },
+      scales: {
+        x: { ticks: { color: '#64748b', font: { family: "'IBM Plex Mono', monospace", size: 10 }, stepSize: 1 }, grid: { color: '#252a38' }, beginAtZero: true },
+        y: { ticks: { color: '#94a3b8', font: { family: "'IBM Plex Sans', sans-serif", size: 11 } }, grid: { color: '#1c2030' } },
+      },
+    },
+  });
+
+  // ── Party chart: vertical bar, count desc then alpha ──
+  const partyEntries = Object.entries(partyCounts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+
+  if (pChart) pChart.destroy();
+  pChart = new Chart(document.getElementById('partyChart'), {
+    type: 'bar',
+    data: {
+      labels:   partyEntries.map(([p]) => p),
+      datasets: [{
+        data:            partyEntries.map(([, n]) => n),
+        backgroundColor: partyEntries.map(([p]) => partyColor(p) + '55'),
+        borderColor:     partyEntries.map(([p]) => partyColor(p)),
+        borderWidth: 1,
+        borderRadius: 2,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          ...TOOLTIP_STYLE,
+          callbacks: { label: ctx => ` ${ctx.raw} candidate${ctx.raw !== 1 ? 's' : ''}` },
+        },
+      },
+      scales: {
+        x: { ticks: { color: '#94a3b8', font: { family: "'IBM Plex Sans', sans-serif", size: 11 }, maxRotation: 35 }, grid: { color: '#1c2030' } },
+        y: { ticks: { color: '#64748b', font: { family: "'IBM Plex Mono', monospace", size: 10 }, stepSize: 1 }, grid: { color: '#252a38' }, beginAtZero: true },
+      },
+    },
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   COVERAGE GRID
+═══════════════════════════════════════════════════════════════════ */
+
+function renderCoverage({ wardCounts, partyCounts }) {
+  const wards = Object.keys(wardCounts).sort();
+
+  // Party column order: count desc then alpha — no hard-coded hierarchy
+  const partyOrder = Object.entries(partyCounts)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([p]) => p);
+
+  // Build ward→party presence map
+  const presence = {};
+  CANDIDATES.forEach(c => {
+    if (!presence[c.ward]) presence[c.ward] = new Set();
+    presence[c.ward].add(c.party);
+  });
+
+  const abbr = p => p
+    .replace('Liberal Democrats', 'Lib Dem')
+    .replace('Conservative', 'Cons.')
+    .replace('Independent', 'Ind.')
+    .replace('Green Party', 'Green');
+
+  let html = '<thead><tr><th class="ward-col" scope="col">Ward</th>';
+  partyOrder.forEach(p => {
+    html += `<th scope="col" style="color:${partyColor(p)}" title="${p}">${abbr(p)}</th>`;
+  });
+  html += '<th scope="col">Total</th></tr></thead><tbody>';
+
+  wards.forEach(ward => {
+    const seats     = WARD_META[ward]?.seats;
+    const present   = presence[ward] || new Set();
+    const count     = present.size;
+    html += `<tr><td class="ward-name" scope="row">${ward}</td>`;
+    partyOrder.forEach(p => {
+      html += present.has(p)
+        ? `<td><span class="dot-present" style="background:${partyColor(p)}55;border:1px solid ${partyColor(p)}88" title="${p} standing in ${ward}" role="img" aria-label="${p} standing"></span></td>`
+        : `<td><span class="dot-absent" title="${p} not standing in ${ward}" role="img" aria-label="Not standing"></span></td>`;
+    });
+    html += `<td style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted)">${count}</td></tr>`;
+  });
+  html += '</tbody>';
+
+  document.getElementById('coverageTable').innerHTML = html;
+  document.getElementById('coverageLegend').innerHTML = partyOrder.map(p =>
+    `<div class="legend-item"><div class="legend-dot" style="background:${partyColor(p)}" aria-hidden="true"></div>${p}</div>`
+  ).join('');
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   WARD CARDS
+═══════════════════════════════════════════════════════════════════ */
+
+function renderWardCards() {
+  const byWard = {};
+  CANDIDATES.forEach(c => {
+    if (!byWard[c.ward]) byWard[c.ward] = [];
+    byWard[c.ward].push(c);
+  });
+
+  document.getElementById('wardGrid').innerHTML = Object.keys(byWard).sort().map(ward => {
+    const cs    = byWard[ward].slice().sort((a, b) => a.candidate.localeCompare(b.candidate));
+
+    return `
+      <div class="ward-card" role="region" aria-label="${ward} ward">
+        <div class="ward-card-header">
+          <div class="ward-card-name">${ward}</div>
+          <div class="ward-card-meta">
+            <div>${cs.length} candidates</div>
+          </div>
+        </div>
+        ${cs.map(c => `
+          <div class="ward-candidate-row">
+            <div class="ward-party-bar" style="background:${partyColor(c.party)}" aria-hidden="true"></div>
+            <div class="ward-candidate-name clickable" onclick="openDetail(${c.id})" role="button" tabindex="0"
+              onkeydown="if(event.key==='Enter'||event.key===' ')openDetail(${c.id})"
+              aria-label="View details for ${c.candidate}">${c.candidate}</div>
+            <div class="ward-candidate-party" style="color:${partyColor(c.party)}">${c.party}</div>
+          </div>`).join('')}
+      </div>`;
+  }).join('');
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   FILTERS  (affect table + CSV only — never charts or insights)
+═══════════════════════════════════════════════════════════════════ */
+
+function applyFilters(pushState = true) {
+  const ward   = document.getElementById('wardFilter').value;
+  const party  = document.getElementById('partyFilter').value;
+  const search = document.getElementById('searchInput').value.toLowerCase().trim();
+
+  filteredCandidates = CANDIDATES.filter(c =>
+    (!ward   || c.ward  === ward)  &&
+    (!party  || c.party === party) &&
+    (!search || c.candidate.toLowerCase().includes(search))
+  );
+
+  renderTable();
+
+  const n = filteredCandidates.length;
+  document.getElementById('filterCount').textContent =
+    n < CANDIDATES.length ? `Showing ${n} of ${CANDIDATES.length}` : '';
+
+  if (pushState) setUrlState({ ward, party, search });
+}
+
+function resetFilters() {
+  document.getElementById('wardFilter').value  = '';
+  document.getElementById('partyFilter').value = '';
+  document.getElementById('searchInput').value = '';
+  filteredCandidates = [...CANDIDATES];
+  renderTable();
+  document.getElementById('filterCount').textContent = '';
+  closeDetail();
+  setUrlState({ ward: '', party: '', search: '', selected: null });
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   TABLE
+═══════════════════════════════════════════════════════════════════ */
+
+function sortTable(col) {
+  sortDir = (sortCol === col) ? (sortDir === 'asc' ? 'desc' : 'asc') : 'asc';
+  sortCol = col;
+
+  document.querySelectorAll('thead th').forEach(th => {
+    th.classList.remove('asc', 'desc');
+    th.setAttribute('aria-sort', 'none');
+  });
+  const th = document.getElementById('th-' + col);
+  if (th) {
+    th.classList.add(sortDir);
+    th.setAttribute('aria-sort', sortDir === 'asc' ? 'ascending' : 'descending');
+  }
+  renderTable();
+}
+
+function renderTable() {
+  const sorted = [...filteredCandidates].sort((a, b) => {
+    const av = String(a[sortCol] || '');
+    const bv = String(b[sortCol] || '');
+    return sortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+  });
+
+  document.getElementById('tableBody').innerHTML = sorted.map(c => {
+    const sel = selectedId === c.id ? 'class="selected"' : '';
+    return `
+      <tr ${sel} data-id="${c.id}">
+        <td><span class="cand-link" onclick="openDetail(${c.id})" role="button" tabindex="0"
+          onkeydown="if(event.key==='Enter'||event.key===' ')openDetail(${c.id})"
+          aria-label="View details for ${c.candidate}">${c.candidate}</span></td>
+        <td>${makePill(c.party)}</td>
+        <td>${c.ward}</td>
+        <td>${c.agent}</td>
+      </tr>`;
+  }).join('');
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   DETAIL PANEL
+═══════════════════════════════════════════════════════════════════ */
+
+/**
+ * Open the candidate detail panel.
+ * @param {number} id - Stable candidate ID.
+ * @param {boolean} pushState - Whether to update the URL.
+ */
+function openDetail(id, pushState = true) {
+  const c = CANDIDATES.find(x => x.id === id);
+  if (!c) return;
+
+  // Switch to candidates tab if not already there
+  const candidatesTab = document.querySelector('[data-tab="candidates"]');
+  if (!document.getElementById('tab-candidates').classList.contains('active')) {
+    activateTab(candidatesTab, false);
+  }
+
+  // Highlight row
+  document.querySelectorAll('#tableBody tr').forEach(r => r.classList.remove('selected'));
+  const row = document.querySelector(`#tableBody tr[data-id="${id}"]`);
+  if (row) row.classList.add('selected');
+
+  selectedId = id;
+
+  document.getElementById('detailName').textContent = c.candidate;
+  document.getElementById('detailParty').innerHTML  =
+    makePill(c.party) + ` &nbsp;<span style="color:var(--muted)">${c.ward}</span>`;
+
+  // Build detail body
+  const na = '<span class="detail-value na">Not available</span>';
+
+  const field = (label, val, isLink = false) => {
+    if (!val) return `<div class="detail-item"><label>${label}</label>${na}</div>`;
+    const content = isLink
+      ? `<a href="${val}" target="_blank" rel="noopener noreferrer">${val}</a>`
+      : val;
+    return `<div class="detail-item"><label>${label}</label><span class="detail-value">${content}</span></div>`;
+  };
+
+  const emailField = (label, val) => {
+    if (!val) return `<div class="detail-item"><label>${label}</label>${na}</div>`;
+    return `<div class="detail-item"><label>${label}</label><span class="detail-value"><a href="mailto:${val}">${val}</a></span></div>`;
+  };
+
+  // Social links — only rendered when data is present
+  const socials = [];
+  if (c.facebook) socials.push(`<a href="${escAttr(c.facebook)}" class="social-link" target="_blank" rel="noopener noreferrer" aria-label="Facebook profile"><span class="social-icon">𝐟</span> Facebook</a>`);
+  if (c.twitter)  socials.push(`<a href="${escAttr(c.twitter)}"  class="social-link" target="_blank" rel="noopener noreferrer" aria-label="X / Twitter profile"><span class="social-icon">𝕏</span> X</a>`);
+
+  let html = `
+    <div class="detail-section">
+      <div class="detail-section-title">Candidate</div>
+      <div class="detail-grid">
+        ${field('Ward',               c.ward)}
+        ${field('Party',              c.party)}
+        ${field('Candidate Address',  c.candidateAddr)}
+      </div>
+    </div>`;
+
+  if (c.email || c.phone || socials.length) {
+    html += `
+    <div class="detail-section">
+      <div class="detail-section-title">Contact</div>
+      <div class="detail-grid">
+        ${emailField('Email', c.email)}
+        ${field('Phone', c.phone)}
+      </div>
+      ${socials.length ? `<div class="social-links" aria-label="Social media links">${socials.join('')}</div>` : ''}
+    </div>`;
+  }
+
+  html += `
+    <div class="detail-section">
+      <div class="detail-section-title">Election Agent</div>
+      <div class="detail-grid">
+        ${field('Agent Name',    c.agent)}
+        ${field('Agent Address', c.agentAddr)}
+      </div>
+    </div>`;
+
+  document.getElementById('detailBody').innerHTML = html;
+
+  const panel = document.getElementById('detailPanel');
+  panel.classList.add('visible');
+  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+  if (pushState) setUrlState({ selected: id });
+}
+
+function closeDetail() {
+  document.getElementById('detailPanel').classList.remove('visible');
+  document.querySelectorAll('#tableBody tr.selected').forEach(r => r.classList.remove('selected'));
+  selectedId = null;
+  setUrlState({ selected: null });
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   AGENTS TAB  (all agents, sorted by candidate count desc then alpha)
+═══════════════════════════════════════════════════════════════════ */
+
+function renderAgents({ agentMap }) {
+  const entries = Object.entries(agentMap)
+    .sort((a, b) => b[1].candidates.length - a[1].candidates.length || a[0].localeCompare(b[0]));
+
+  const total   = entries.length;
+  const multi   = entries.filter(([, { candidates }]) => candidates.length > 1).length;
+  document.getElementById('agentsSubtitle').textContent =
+    `${total} agent${total !== 1 ? 's' : ''} registered · ${multi} representing multiple candidates`;
+
+  document.getElementById('agentList').innerHTML = entries.map(([agent, { addr, candidates }]) => {
+    const countLabel = candidates.length === 1 ? '1 candidate' : `${candidates.length} candidates`;
+    const candLinks  = candidates
+      .slice()
+      .sort((a, b) => a.candidate.localeCompare(b.candidate))
+      .map(c =>
+        `<span class="cand-link" style="color:${partyColor(c.party)}"
+          onclick="openDetail(${c.id})" role="button" tabindex="0"
+          onkeydown="if(event.key==='Enter'||event.key===' ')openDetail(${c.id})"
+          aria-label="View ${c.candidate}">${c.candidate}</span> — ${c.ward}`
+      ).join('<br>');
+
+    return `
+      <div class="agent-row">
+        <div class="agent-count" aria-label="${countLabel}">${candidates.length}</div>
+        <div class="agent-info">
+          <div class="agent-name">${agent}</div>
+          <div class="agent-addr">${addr} &nbsp;·&nbsp; ${countLabel}</div>
+          <div class="agent-candidates">${candLinks}</div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   CSV EXPORT  (filtered data only; timestamped filename)
+═══════════════════════════════════════════════════════════════════ */
+
+function exportCSV() {
+  const headers = ['Candidate', 'Party', 'Ward', 'Agent', 'Agent Address',
+                   'Candidate Address', 'Email', 'Phone', 'Facebook', 'Twitter'];
+  const esc = v => `"${String(v || '').replace(/"/g, '""')}"`;
+  const rows = filteredCandidates.map(c =>
+    [c.candidate, c.party, c.ward, c.agent, c.agentAddr,
+     c.candidateAddr, c.email, c.phone, c.facebook, c.twitter].map(esc).join(',')
+  );
+  const csv  = [headers.map(esc).join(','), ...rows].join('\n');
+  const date = new Date().toISOString().slice(0, 10);
+  const a    = document.createElement('a');
+  a.href     = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+  a.download = `plymouth-elections-2026_${date}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   HELPERS
+═══════════════════════════════════════════════════════════════════ */
+
+/** Render a coloured party pill badge. */
+function makePill(party) {
+  const c = partyColor(party);
+  return `<span class="party-pill" style="background:${c}22;color:${c};border:1px solid ${c}44">${party}</span>`;
+}
+
+/** Escape a value for use in an HTML attribute. */
+function escAttr(v) {
+  return String(v || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;');
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   INIT
+═══════════════════════════════════════════════════════════════════ */
+
+async function init() {
+  // Load data
+  CANDIDATES = await loadData();
+  filteredCandidates = [...CANDIDATES];
+
+  // Populate filter dropdowns from full dataset (alphabetical)
+  const wards   = [...new Set(CANDIDATES.map(c => c.ward))].sort();
+  const parties = [...new Set(CANDIDATES.map(c => c.party))].sort();
+  const wf = document.getElementById('wardFilter');
+  const pf = document.getElementById('partyFilter');
+  wards.forEach(w   => { const o = document.createElement('option'); o.value = w; o.textContent = w; wf.appendChild(o); });
+  parties.forEach(p => { const o = document.createElement('option'); o.value = p; o.textContent = p; pf.appendChild(o); });
+
+  wf.addEventListener('change', () => applyFilters());
+  pf.addEventListener('change', () => applyFilters());
+  document.getElementById('searchInput').addEventListener('input', () => applyFilters());
+
+  // Initial render
+  renderAll();
+
+  // Restore URL state (tab, filters, selected)
+  restoreUrlState();
+
+  hideLoading();
+}
+
+init();
+</script>
+</body>
+</html>
